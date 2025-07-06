@@ -20,9 +20,31 @@ const PermissionScreen = () => {
     battery: 'Not Requested',
   });
 
+  const [buttonStates, setButtonStates] = useState({
+    location: { acceptDisabled: false, denyDisabled: false },
+    activity: { acceptDisabled: false, denyDisabled: false },
+    bluetooth: { acceptDisabled: false, denyDisabled: false },
+    battery: { acceptDisabled: false, denyDisabled: false },
+  });
+
+
+
+  // Helper function to check if permission is granted
+  const isPermissionGranted = (status) => {
+    return ['Granted', 'Configured', 'Not Required'].includes(status);
+  };
+
   // Request Location Permission
   const requestLocationPermission = async () => {
     try {
+      console.log('Requesting location permission...');
+      
+      // Check if platform is Android
+      if (Platform.OS !== 'android') {
+        Alert.alert('Platform Error', 'This permission system is designed for Android');
+        return;
+      }
+
       const granted = await PermissionsAndroid.request(
         PermissionsAndroid.PERMISSIONS.ACCESS_FINE_LOCATION,
         {
@@ -35,34 +57,52 @@ const PermissionScreen = () => {
         },
       );
       
+      console.log('Location permission result:', granted);
+      
       if (granted === PermissionsAndroid.RESULTS.GRANTED) {
         console.log('Location permission granted');
         setPermissionStatus(prev => ({...prev, location: 'Granted'}));
       } else {
         console.log('Location permission denied');
         setPermissionStatus(prev => ({...prev, location: 'Denied'}));
+        setButtonStates(prev => ({...prev, location: { acceptDisabled: false, denyDisabled: true }}));
       }
     } catch (err) {
-      console.warn(err);
+      console.warn('Location permission error:', err);
       setPermissionStatus(prev => ({...prev, location: 'Error'}));
     }
+  };
+
+  // Deny Location Permission
+  const denyLocationPermission = () => {
+    setPermissionStatus(prev => ({...prev, location: 'Denied'}));
+    setButtonStates(prev => ({...prev, location: { acceptDisabled: false, denyDisabled: true }}));
   };
 
   // Request Physical Activity Permission (Android API 29+)
   const requestActivityPermission = async () => {
     try {
+      console.log('Requesting activity permission...');
+      
+      if (Platform.OS !== 'android') {
+        Alert.alert('Platform Error', 'This permission system is designed for Android');
+        return;
+      }
+
       if (Platform.Version >= 29) {
         const granted = await PermissionsAndroid.request(
           PermissionsAndroid.PERMISSIONS.ACTIVITY_RECOGNITION,
           {
             title: 'Physical Activity Permission Required',
             message:
-              'This app needs access to your physical activity data to track your fitness activities.',
+              'This app needs access to your physical activity data to track if you are walking, driving or running',
             buttonNeutral: 'Ask Me Later',
             buttonNegative: 'Cancel',
             buttonPositive: 'OK',
           },
         );
+        
+        console.log('Activity permission result:', granted);
         
         if (granted === PermissionsAndroid.RESULTS.GRANTED) {
           console.log('Activity permission granted');
@@ -70,20 +110,34 @@ const PermissionScreen = () => {
         } else {
           console.log('Activity permission denied');
           setPermissionStatus(prev => ({...prev, activity: 'Denied'}));
+          setButtonStates(prev => ({...prev, activity: { acceptDisabled: false, denyDisabled: true }}));
         }
       } else {
-        console.log('Activity permission not required for this Android version');
+        console.log('Activity permission not required for Android version:', Platform.Version);
         setPermissionStatus(prev => ({...prev, activity: 'Not Required'}));
       }
     } catch (err) {
-      console.warn(err);
+      console.warn('Activity permission error:', err);
       setPermissionStatus(prev => ({...prev, activity: 'Error'}));
     }
+  };
+
+  // Deny Activity Permission
+  const denyActivityPermission = () => {
+    setPermissionStatus(prev => ({...prev, activity: 'Denied'}));
+    setButtonStates(prev => ({...prev, activity: { acceptDisabled: false, denyDisabled: true }}));
   };
 
   // Request Bluetooth Permission (Android 12+)
   const requestBluetoothPermission = async () => {
     try {
+      console.log('Requesting bluetooth permission...');
+      
+      if (Platform.OS !== 'android') {
+        Alert.alert('Platform Error', 'This permission system is designed for Android');
+        return;
+      }
+
       if (Platform.Version >= 31) {
         // For Android 12+ (API 31+)
         const permissions = [
@@ -92,6 +146,8 @@ const PermissionScreen = () => {
         ];
         
         const granted = await PermissionsAndroid.requestMultiple(permissions);
+        
+        console.log('Bluetooth permission result:', granted);
         
         if (
           granted[PermissionsAndroid.PERMISSIONS.BLUETOOTH_SCAN] === PermissionsAndroid.RESULTS.GRANTED &&
@@ -102,16 +158,23 @@ const PermissionScreen = () => {
         } else {
           console.log('Bluetooth permissions denied');
           setPermissionStatus(prev => ({...prev, bluetooth: 'Denied'}));
+          setButtonStates(prev => ({...prev, bluetooth: { acceptDisabled: false, denyDisabled: true }}));
         }
       } else {
         // For older Android versions, no runtime permission needed
-        console.log('Bluetooth permission not required for this Android version');
+        console.log('Bluetooth permission not required for Android version:', Platform.Version);
         setPermissionStatus(prev => ({...prev, bluetooth: 'Not Required'}));
       }
     } catch (err) {
-      console.warn(err);
+      console.warn('Bluetooth permission error:', err);
       setPermissionStatus(prev => ({...prev, bluetooth: 'Error'}));
     }
+  };
+
+  // Deny Bluetooth Permission
+  const denyBluetoothPermission = () => {
+    setPermissionStatus(prev => ({...prev, bluetooth: 'Denied'}));
+    setButtonStates(prev => ({...prev, bluetooth: { acceptDisabled: false, denyDisabled: true }}));
   };
 
   // Request Battery Optimization Permission
@@ -120,11 +183,11 @@ const PermissionScreen = () => {
       // Battery optimization is handled differently - need to open settings
       Alert.alert(
         'Battery Optimization',
-        'To ensure the app works properly in the background, please disable battery optimization for this app. You will be redirected to the settings.',
+        'To ensure the app works properly in the background, please disable battery optimization for this app. You will be redirected to the settings.\n\nAfter making changes, return to the app and tap "Check Status" to update.',
         [
           {
             text: 'Cancel',
-            onPress: () => setPermissionStatus(prev => ({...prev, battery: 'Denied'})),
+            onPress: () => setPermissionStatus(prev => ({...prev, battery: 'Cancelled'})),
             style: 'cancel',
           },
           {
@@ -132,7 +195,7 @@ const PermissionScreen = () => {
             onPress: () => {
               // Open battery optimization settings
               Linking.openSettings();
-              setPermissionStatus(prev => ({...prev, battery: 'Settings Opened'}));
+              setPermissionStatus(prev => ({...prev, battery: 'Settings Opened - Please Return'}));
             },
           },
         ],
@@ -143,13 +206,71 @@ const PermissionScreen = () => {
     }
   };
 
-  // Request All Permissions
-  const requestAllPermissions = async () => {
-    await requestLocationPermission();
-    await requestActivityPermission();
-    await requestBluetoothPermission();
-    await requestBatteryOptimizationPermission();
+  // Accept Battery Optimization Permission
+  const acceptBatteryOptimizationPermission = () => {
+    Alert.alert(
+      'Battery Optimization',
+      'To ensure the app works properly in the background, please disable battery optimization for this app. You will be redirected to the settings.\n\nAfter making changes, return to the app.',
+      [
+        {
+          text: 'Cancel',
+          onPress: () => setPermissionStatus(prev => ({...prev, battery: 'Cancelled'})),
+          style: 'cancel',
+        },
+        {
+          text: 'Open Settings',
+          onPress: () => {
+            // Open battery optimization settings
+            Linking.openSettings();
+            setPermissionStatus(prev => ({...prev, battery: 'Settings Opened - Please Return'}));
+            
+            // Show the confirmation popup when user returns to the app
+            setTimeout(() => {
+              checkBatteryOptimizationStatus();
+            }, 1000); // Small delay to ensure settings opened
+          },
+        },
+      ],
+    );
   };
+
+  // Deny Battery Optimization Permission
+  const denyBatteryOptimizationPermission = () => {
+    setPermissionStatus(prev => ({...prev, battery: 'Denied'}));
+    setButtonStates(prev => ({...prev, battery: { acceptDisabled: false, denyDisabled: true }}));
+  };
+
+  // Check Battery Optimization Status (Manual confirmation)
+  const checkBatteryOptimizationStatus = () => {
+    Alert.alert(
+      'Battery Optimization Status',
+      'Did you disable battery optimization for this app in the settings?',
+      [
+        {
+          text: 'No, Open Settings Again',
+          onPress: () => {
+            Linking.openSettings();
+            setPermissionStatus(prev => ({...prev, battery: 'Settings Opened - Please Return'}));
+          },
+        },
+        {
+          text: 'Yes, I Disabled It',
+          onPress: () => {
+            setPermissionStatus(prev => ({...prev, battery: 'Configured'}));
+          },
+        },
+      ],
+    );
+  };
+
+  // Granted Indicator Component
+  const GrantedIndicator = () => (
+    <View style={styles.grantedIndicator}>
+      <Text style={styles.grantedText}>✓ Granted</Text>
+    </View>
+  );
+
+
 
   return (
     <SafeAreaView style={styles.container}>
@@ -166,11 +287,29 @@ const PermissionScreen = () => {
           <Text style={styles.permissionDescription}>
             Required for location-based services
           </Text>
-          <Button
-            title="Request Location"
-            onPress={requestLocationPermission}
-            color="#007AFF"
-          />
+          {isPermissionGranted(permissionStatus.location) ? (
+            <GrantedIndicator />
+          ) : (
+            <View style={styles.buttonRow}>
+              <View style={styles.buttonHalf}>
+                <Button
+                  title="Deny"
+                  onPress={denyLocationPermission}
+                  color="#FF3B30"
+                  disabled={buttonStates.location.denyDisabled}
+                />
+              </View>
+              <View style={styles.buttonHalf}>
+                <Button
+                  title="Accept"
+                  onPress={requestLocationPermission}
+                  color="#34C759"
+                  disabled={buttonStates.location.acceptDisabled}
+                />
+              </View>
+              
+            </View>
+          )}
         </View>
 
         <View style={styles.permissionItem}>
@@ -178,13 +317,31 @@ const PermissionScreen = () => {
             🏃‍♂️ Physical Activity: {permissionStatus.activity}
           </Text>
           <Text style={styles.permissionDescription}>
-            Required for fitness tracking
+            Required for tracking physical activity
           </Text>
-          <Button
-            title="Request Activity"
-            onPress={requestActivityPermission}
-            color="#34C759"
-          />
+          {isPermissionGranted(permissionStatus.activity) ? (
+            <GrantedIndicator />
+          ) : (
+            <View style={styles.buttonRow}>
+               <View style={styles.buttonHalf}>
+                <Button
+                  title="Deny"
+                  onPress={denyActivityPermission}
+                  color="#FF3B30"
+                  disabled={buttonStates.activity.denyDisabled}
+                />
+              </View>
+              <View style={styles.buttonHalf}>
+                <Button
+                  title="Accept"
+                  onPress={requestActivityPermission}
+                  color="#34C759"
+                  disabled={buttonStates.activity.acceptDisabled}
+                />
+              </View>
+             
+            </View>
+          )}
         </View>
 
         <View style={styles.permissionItem}>
@@ -194,11 +351,29 @@ const PermissionScreen = () => {
           <Text style={styles.permissionDescription}>
             Required for device connectivity
           </Text>
-          <Button
-            title="Request Bluetooth"
-            onPress={requestBluetoothPermission}
-            color="#FF9500"
-          />
+          {isPermissionGranted(permissionStatus.bluetooth) ? (
+            <GrantedIndicator />
+          ) : (
+            <View style={styles.buttonRow}>
+              <View style={styles.buttonHalf}>
+                <Button
+                  title="Deny"
+                  onPress={denyBluetoothPermission}
+                  color="#FF3B30"
+                  disabled={buttonStates.bluetooth.denyDisabled}
+                />
+              </View>
+              <View style={styles.buttonHalf}>
+                <Button
+                  title="Accept"
+                  onPress={requestBluetoothPermission}
+                  color="#34C759"
+                  disabled={buttonStates.bluetooth.acceptDisabled}
+                />
+              </View>
+              
+            </View>
+          )}
         </View>
 
         <View style={styles.permissionItem}>
@@ -208,20 +383,30 @@ const PermissionScreen = () => {
           <Text style={styles.permissionDescription}>
             Ensures app works in background
           </Text>
-          <Button
-            title="Request Battery"
-            onPress={requestBatteryOptimizationPermission}
-            color="#FF3B30"
-          />
+          {isPermissionGranted(permissionStatus.battery) ? (
+            <GrantedIndicator />
+          ) : (
+            <View style={styles.buttonRow}>
+              <View style={styles.buttonHalf}>
+                <Button
+                  title="Deny"
+                  onPress={denyBatteryOptimizationPermission}
+                  color="#FF3B30"
+                  disabled={buttonStates.battery.denyDisabled}
+                />
+              </View>
+              <View style={styles.buttonHalf}>
+                <Button
+                  title="Accept"
+                  onPress={acceptBatteryOptimizationPermission}
+                  color="#34C759"
+                  disabled={buttonStates.battery.acceptDisabled}
+                />
+              </View>
+              
+            </View>
+          )}
         </View>
-      </View>
-
-      <View style={styles.buttonContainer}>
-        <Button
-          title="Request All Permissions"
-          onPress={requestAllPermissions}
-          color="#5856D6"
-        />
       </View>
     </SafeAreaView>
   );
@@ -278,8 +463,29 @@ const styles = StyleSheet.create({
     marginBottom: 10,
     fontStyle: 'italic',
   },
-  buttonContainer: {
-    marginTop: 20,
+  buttonRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    gap: 10,
+  },
+  buttonHalf: {
+    flex: 1,
+  },
+  grantedIndicator: {
+    backgroundColor: '#34C759',
+    paddingVertical: 12,
+    paddingHorizontal: 20,
+    borderRadius: 8,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  grantedText: {
+    color: '#fff',
+    fontSize: 16,
+    fontWeight: '600',
+  },
+  statusButtonContainer: {
+    marginTop: 10,
   },
 });
 
